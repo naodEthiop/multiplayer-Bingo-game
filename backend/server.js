@@ -7,6 +7,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Telebirr Subscription API
 app.post('/api/initiate-subscription', async (req, res) => {
   try {
     // Check for required environment variables
@@ -93,6 +94,117 @@ app.post('/api/initiate-subscription', async (req, res) => {
       error: 'Internal server error', 
       details: error.message 
     });
+  }
+});
+
+// Wallet Deposit API
+app.post('/api/wallet/deposit', async (req, res) => {
+  try {
+    const { userId, amount, paymentMethod, reference } = req.body;
+
+    // Validate request
+    if (!userId || !amount || !paymentMethod) {
+      return res.status(400).json({ 
+        error: 'Missing required fields',
+        details: 'userId, amount, and paymentMethod are required'
+      });
+    }
+
+    // For development, simulate successful deposit
+    if (!process.env.USE_REAL_PAYMENT_API) {
+      console.log(`Mock deposit: ${amount} ETB for user ${userId} via ${paymentMethod.name}`);
+      return res.json({ 
+        success: true, 
+        transactionId: `DEP-${Date.now()}`,
+        status: 'completed'
+      });
+    }
+
+    // Implement real payment gateway integration here
+    res.json({ success: true, transactionId: reference, status: 'pending' });
+  } catch (error) {
+    console.error('Deposit error:', error);
+    res.status(500).json({ error: 'Deposit failed', details: error.message });
+  }
+});
+
+// Wallet Withdrawal API
+app.post('/api/wallet/withdraw', async (req, res) => {
+  try {
+    const { userId, amount, paymentMethod, accountDetails } = req.body;
+
+    // Validate request
+    if (!userId || !amount || !paymentMethod || !accountDetails) {
+      return res.status(400).json({ 
+        error: 'Missing required fields',
+        details: 'userId, amount, paymentMethod, and accountDetails are required'
+      });
+    }
+
+    // For development, simulate withdrawal processing
+    if (!process.env.USE_REAL_PAYMENT_API) {
+      console.log(`Mock withdrawal: ${amount} ETB for user ${userId} via ${paymentMethod.name}`);
+      return res.json({ 
+        success: true, 
+        transactionId: `WTH-${Date.now()}`,
+        status: 'processing',
+        estimatedCompletion: '24 hours'
+      });
+    }
+
+    // Implement real payment gateway integration here
+    res.json({ success: true, transactionId: `WTH-${Date.now()}`, status: 'processing' });
+  } catch (error) {
+    console.error('Withdrawal error:', error);
+    res.status(500).json({ error: 'Withdrawal failed', details: error.message });
+  }
+});
+
+// Payment verification webhook
+app.post('/api/webhook/payment', async (req, res) => {
+  try {
+    console.log('Payment webhook received:', req.body);
+    
+    // Verify webhook signature (implement based on payment provider)
+    // Update transaction status in database
+    // Notify user of payment status
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Webhook error:', error);
+    res.status(500).json({ error: 'Webhook processing failed' });
+  }
+});
+
+// Admin endpoints for withdrawal management
+app.get('/api/admin/withdrawals', async (req, res) => {
+  try {
+    // Implement admin authentication middleware
+    // Return pending withdrawal requests
+    res.json({ withdrawals: [] });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch withdrawals' });
+  }
+});
+
+app.post('/api/admin/withdrawals/:id/approve', async (req, res) => {
+  try {
+    const { id } = req.params;
+    // Implement withdrawal approval logic
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to approve withdrawal' });
+  }
+});
+
+app.post('/api/admin/withdrawals/:id/reject', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body;
+    // Implement withdrawal rejection logic
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to reject withdrawal' });
   }
 });
 

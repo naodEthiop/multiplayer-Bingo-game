@@ -7,6 +7,7 @@ import GameLobby from './components/GameLobby';
 import GameRoom from './components/GameRoom';
 import AuthPage from './components/AuthPage';
 import PaymentPage from './components/PaymentPage';
+import WalletPage from './components/WalletPage';
 import GameList from './components/GameList';
 import { GameProvider } from './contexts/GameContext';
 
@@ -76,6 +77,10 @@ function App() {
             <Route 
               path="/payment/:gameId" 
               element={user ? <PaymentPage /> : <Navigate to="/auth" />} 
+            />
+            <Route 
+              path="/wallet" 
+              element={user ? <WalletPage /> : <Navigate to="/auth" />} 
             />
           </Routes>
           <Toaster position="top-right" />
