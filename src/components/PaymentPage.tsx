@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { CreditCard, ArrowLeft, Shield, Clock } from 'lucide-react';
 import { auth } from '../firebase/config';
 import { gameService } from '../services/gameService';
-import { chapaService } from '../services/chapaService';
+import { initiateTelebirrSubscription } from '../services/telebirrService';
 import { GameRoom } from '../types/game';
 import toast from 'react-hot-toast';
 
@@ -25,54 +25,45 @@ const PaymentPage: React.FC = () => {
     return () => unsubscribe();
   }, [gameId]);
 
-  const handlePayment = async () => {
-    if (!gameRoom || !auth.currentUser || !gameId) return;
+  // ...existing code...
 
-    setProcessing(true);
-    try {
-      const txRef = chapaService.generateTxRef();
-      
-      const paymentData = {
-        amount: gameRoom.entryFee,
-        currency: 'ETB',
-        email: auth.currentUser.email!,
-        first_name: auth.currentUser.displayName?.split(' ')[0] || 'Player',
-        last_name: auth.currentUser.displayName?.split(' ')[1] || '',
-        tx_ref: txRef,
-        callback_url: `${window.location.origin}/api/payment/callback`,
-        return_url: `${window.location.origin}/game/${gameId}`,
-        customization: {
-          title: 'Bingo Game Entry Fee',
-          description: `Payment for joining ${gameRoom.name}`
-        }
-      };
+const handlePayment = async () => {
+  if (!gameRoom || !auth.currentUser || !gameId) return;
 
-      // Record payment in database
-      await gameService.recordPayment({
-        playerId: auth.currentUser.uid,
-        gameRoomId: gameId,
-        amount: gameRoom.entryFee,
-        currency: 'ETB',
-        status: 'pending',
-        chapaReference: txRef,
-        createdAt: new Date()
-      });
+  setProcessing(true);
+  try {
+    const subscriptionId = `bingo-sub-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+    const subscriptionData = {
+      subscriptionId,
+      subject: `Bingo Game Subscription for ${gameRoom.name}`,
+      amount: gameRoom.entryFee,
+      returnUrl: `${window.location.origin}/game/${gameId}`,
+      period: "MONTH", // or "WEEK", "DAY" as needed
+      interval: 1      // every 1 month
+    };
 
-      const response = await chapaService.initializePayment(paymentData);
-      
-      if (response.status === 'success') {
-        // Redirect to Chapa checkout
-        window.location.href = response.data.checkout_url;
-      } else {
-        throw new Error('Payment initialization failed');
-      }
-    } catch (error) {
-      toast.error('Payment failed. Please try again.');
-      console.error('Payment error:', error);
-    } finally {
-      setProcessing(false);
-    }
-  };
+    // Record payment in database (optional, adjust as needed)
+    await gameService.recordPayment({
+      playerId: auth.currentUser.uid,
+      gameRoomId: gameId,
+      amount: gameRoom.entryFee,
+      currency: 'ETB',
+      status: 'pending',
+      chapaReference: subscriptionId, // Add a unique reference for this payment
+      createdAt: new Date()
+    });
+
+    const subscriptionUrl = await initiateTelebirrSubscription(subscriptionData);
+
+    // Redirect to Telebirr subscription authorization page
+    window.location.href = subscriptionUrl;
+  } catch (error) {
+    toast.error('Subscription payment failed. Please try again.');
+    console.error('Payment error:', error);
+  } finally {
+    setProcessing(false);
+  }
+};
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-ET', {
@@ -155,7 +146,7 @@ const PaymentPage: React.FC = () => {
                 <span className="font-semibold">Secure Payment</span>
               </div>
               <p className="text-white/80 text-sm">
-                Your payment is processed securely through Chapa. We never store your payment information.
+                Your payment is processed securely through <b>Telebirr</b> We never store your payment information.
               </p>
             </div>
           </div>
@@ -207,7 +198,7 @@ const PaymentPage: React.FC = () => {
               ) : (
                 <>
                   <CreditCard className="w-5 h-5" />
-                  <span>Pay with Chapa</span>
+                  <span>Pay with Telebirr</span>
                 </>
               )}
             </button>

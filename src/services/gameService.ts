@@ -44,14 +44,13 @@ class GameService {
       status: 'waiting',
       calledNumbers: [],
       currentCall: null,
-      createdAt: new Date(),
+      createdAt: serverTimestamp(),
       telegramBotEnabled,
       ...(telegramBotEnabled && telegramChannelId ? { telegramChannelId } : {})
     };
 
     const docRef = await addDoc(collection(db, 'gameRooms'), {
-      ...gameRoom,
-      createdAt: serverTimestamp()
+      ...gameRoom
     });
     
     return docRef.id;
@@ -61,7 +60,8 @@ class GameService {
     const gameRoomRef = doc(db, 'gameRooms', gameRoomId);
     await updateDoc(gameRoomRef, {
       players: arrayUnion(player),
-      prizePool: increment(0) // Will be updated after payment confirmation
+      prizePool: increment(0) 
+   
     });
   }
 

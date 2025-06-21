@@ -8,7 +8,11 @@ import CreateGameModal from './CreateGameModal';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 
-const GameLobby: React.FC = () => {
+interface GameLobbyProps {
+  onShowGameList: () => void;
+}
+
+const GameLobby: React.FC<GameLobbyProps> = ({ onShowGameList }) => {
   const [gameRooms, setGameRooms] = useState<GameRoom[]>([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -27,23 +31,24 @@ const GameLobby: React.FC = () => {
     if (!auth.currentUser) return;
 
     if (gameRoom.entryFee > 0) {
-      // Redirect to payment page
       navigate(`/payment/${gameRoom.id}`);
     } else {
-      // Join free game directly
       try {
         const player = {
           id: auth.currentUser.uid,
           name: auth.currentUser.displayName || 'Anonymous',
           email: auth.currentUser.email || '',
           isOnline: true,
-          joinedAt: new Date()
+          avatar: auth.currentUser.photoURL || '',
+          telegramId: '', // Optional, if using Telegram integration
+          // joinedAt: new Date()
         };
 
         await gameService.joinGameRoom(gameRoom.id, player);
         navigate(`/game/${gameRoom.id}`);
         toast.success('Joined game successfully!');
       } catch (error) {
+        console.error('Error joining game:', error);
         toast.error('Failed to join game');
       }
     }
@@ -96,7 +101,6 @@ const GameLobby: React.FC = () => {
             </h1>
             <p className="text-white/80 text-lg">Join games, win prizes, have fun!</p>
           </div>
-          
           <div className="flex items-center space-x-4">
             <div className="text-white text-right">
               <p className="text-sm opacity-80">Welcome back,</p>
@@ -118,14 +122,22 @@ const GameLobby: React.FC = () => {
             <p className="text-lg font-semibold">{gameRooms.length} Active Games</p>
             <p className="text-sm opacity-80">Find a game or create your own</p>
           </div>
-          
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white px-6 py-3 rounded-lg font-semibold flex items-center space-x-2 transition-all transform hover:scale-105"
-          >
-            <Plus className="w-5 h-5" />
-            <span>Create Game</span>
-          </button>
+          <div className="flex space-x-2">
+            <button
+              onClick={onShowGameList}
+              className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white px-4 py-2 rounded-lg font-semibold flex items-center space-x-2 transition-all transform hover:scale-105"
+            >
+              <Users className="w-5 h-5" />
+              <span>View Games</span>
+            </button>
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white px-6 py-3 rounded-lg font-semibold flex items-center space-x-2 transition-all transform hover:scale-105"
+            >
+              <Plus className="w-5 h-5" />
+              <span>Create Game</span>
+            </button>
+          </div>
         </div>
 
         {/* Game Rooms Grid */}

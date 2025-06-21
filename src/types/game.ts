@@ -5,7 +5,7 @@ export interface Player {
   telegramId?: string;
   avatar?: string;
   isOnline: boolean;
-  joinedAt: Date;
+  // joinedAt: Date;
 }
 
 export interface BingoSquare {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { auth } from './firebase/config';
@@ -6,13 +6,16 @@ import { onAuthStateChanged, User } from 'firebase/auth';
 import GameLobby from './components/GameLobby';
 import GameRoom from './components/GameRoom';
 import AuthPage from './components/AuthPage';
-import CreateGameModal from './components/CreateGameModal';
 import PaymentPage from './components/PaymentPage';
+import GameList from './components/GameList';
 import { GameProvider } from './contexts/GameContext';
+
 
 function App() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showGameList, setShowGameList] = useState(false);
+  const [selectedGameId, setSelectedGameId] = useState<string | null>(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -22,6 +25,14 @@ function App() {
 
     return () => unsubscribe();
   }, []);
+
+  // Handler for selecting a game from GameList
+  const handleSelectGame = (gameId: string) => {
+    setSelectedGameId(gameId);
+    setShowGameList(false);
+  };
+  const handleBackToMenu = () => {
+    setShowGameList(false); }
 
   if (loading) {
     return (
@@ -38,7 +49,21 @@ function App() {
           <Routes>
             <Route 
               path="/" 
-              element={user ? <GameLobby /> : <Navigate to="/auth" />} 
+              element={
+                user ? (
+                  showGameList ? (
+                    <GameList
+                     onSelectGame={handleSelectGame}
+                     onBack={handleBackToMenu} />
+                  ) : selectedGameId ? (
+                    <Navigate to={`/game/${selectedGameId}`} />
+                  ) : (
+                    <GameLobby onShowGameList={() => setShowGameList(true)} />
+                  )
+                ) : (
+                  <Navigate to="/auth" />
+                )
+              }
             />
             <Route 
               path="/auth" 
