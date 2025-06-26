@@ -2,10 +2,13 @@ import React, { useState } from 'react';
 import { X, Wallet, AlertCircle } from 'lucide-react';
 import { auth } from '../firebase/config';
 import toast from 'react-hot-toast';
+import axios from "axios";
+import { doc, getDoc } from "firebase/firestore";
+import { db } from "../firebase/config";
 
 interface DepositModalProps {
   onClose: () => void;
-  wallet: any;
+  wallet: { balance: number };
 }
 
 const DepositModal: React.FC<DepositModalProps> = ({ onClose, wallet }) => {
@@ -28,31 +31,24 @@ const DepositModal: React.FC<DepositModalProps> = ({ onClose, wallet }) => {
 
     setLoading(true);
     try {
-      // Call Python backend for Chapa payment
-      const response = await fetch('http://0.0.0.0:5000/api/wallet/deposit', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          userId: auth.currentUser.uid,
-          amount: depositAmount,
-          email: auth.currentUser.email,
-          first_name: auth.currentUser.displayName?.split(' ')[0] || 'User',
-          last_name: auth.currentUser.displayName?.split(' ')[1] || 'Player'
-        })
+      // Fetch phone number from Firestore
+      const userDoc = await getDoc(doc(db, "users", auth.currentUser.uid));
+      const phone = userDoc.exists() ? userDoc.data().phone : "";
+
+      // Call backend to initiate Chapa payment
+      const res = await axios.post("http://localhost:5000/api/wallet/deposit", {
+        userId: auth.currentUser.uid,
+        amount: depositAmount,
+        email: auth.currentUser.email,
+        phone, // Pass phone number to backend
+        first_name: auth.currentUser.displayName?.split(" ")[0] || "User",
+        last_name: auth.currentUser.displayName?.split(" ")[1] || "",
       });
 
-      const result = await response.json();
-
-      if (result.checkout_url) {
-        // Redirect to Chapa checkout
-        window.location.href = result.checkout_url;
-      } else {
-        throw new Error(result.error || 'Payment initialization failed');
-      }
+      // Redirect user to Chapa payment page
+      window.location.href = res.data.checkout_url;
     } catch (error: any) {
-      toast.error(error.message || 'Deposit failed');
+      toast.error(error.response?.data?.error || error.message || 'Deposit failed');
     } finally {
       setLoading(false);
     }

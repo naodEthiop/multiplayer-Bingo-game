@@ -8,6 +8,8 @@ import {
 import { auth } from "../firebase/config";
 import { Mail, Lock, User, Trophy } from "lucide-react";
 import toast from "react-hot-toast";
+import { doc, setDoc } from "firebase/firestore";
+import { db } from "../firebase/config";
 
 const AuthPage: React.FC = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -38,14 +40,17 @@ const AuthPage: React.FC = () => {
           formData.password,
         );
 
-        // Update profile including phone number after creating user
         await updateProfile(userCredential.user, {
           displayName: formData.name,
-          phoneNumber: formData.phone, // Optional, if you want to store it
         });
 
-        // Add to Firestore or your database here
-        // Initially consider using another function to save this data
+        // Save user info (including phone) to Firestore
+        await setDoc(doc(db, "users", userCredential.user.uid), {
+          name: formData.name,
+          email: formData.email,
+          phone: formData.phone,
+          createdAt: new Date(),
+        });
 
         toast.success("Account created successfully!");
       }
