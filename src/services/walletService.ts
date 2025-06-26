@@ -273,5 +273,3 @@ class WalletService {
 }
 
 export const walletService = new WalletService();
-
-export const walletService = new WalletService();
