@@ -1,11 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Users, Trophy, Volume2, Crown, MessageCircle } from 'lucide-react';
+import { ArrowLeft, Users, Trophy, Volume2, Crown, MessageCircle, Settings, VolumeX } from 'lucide-react';
 import { auth } from '../firebase/config';
 import { gameService } from '../services/gameService';
 import { telegramService } from '../services/telegramService';
+import { voiceService } from '../services/voiceService';
+import { languageService } from '../services/languageService';
 import { GameRoom as GameRoomType, BingoCard } from '../types/game';
 import BingoCardComponent from './BingoCard';
+import VoiceSettings from './VoiceSettings';
 import toast from 'react-hot-toast';
 
 const GameRoom: React.FC = () => {
@@ -14,13 +17,17 @@ const GameRoom: React.FC = () => {
   const [gameRoom, setGameRoom] = useState<GameRoomType | null>(null);
   const [bingoCard, setBingoCard] = useState<BingoCard | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showVoiceSettings, setShowVoiceSettings] = useState(false);
+  const [voiceEnabled, setVoiceEnabled] = useState(true);
+  const [currentLanguage, setCurrentLanguage] = useState(languageService.getCurrentLanguage());
 
   useEffect(() => {
     if (!gameId) return;
 
     setLoading(true);
 
-    const unsubscribe = gameService.subscribeToGameRoom(gameId, (room) => {
+    const unsubscribe = gameService.subscribeToGameRoom(gameId, async (room) => {
+      const previousCall = gameRoom?.currentCall;
       setGameRoom(room);
       setLoading(false);
 
@@ -29,12 +36,36 @@ const GameRoom: React.FC = () => {
         const newCard = gameService.generateBingoCard(auth.currentUser.uid);
         setBingoCard(newCard);
       }
+
+      // Announce new number if it changed and voice is enabled
+      if (room?.currentCall && room.currentCall !== previousCall && voiceEnabled) {
+        const letter = getLetterForNumber(room.currentCall);
+        try {
+          await voiceService.speakBingoNumber(room.currentCall, letter, currentLanguage);
+        } catch (error) {
+          console.error('Voice announcement failed:', error);
+        }
+      }
+
+      // Announce game events
+      if (room?.status === 'playing' && gameRoom?.status === 'starting' && voiceEnabled) {
+        try {
+          await voiceService.speakGameEvent('gameStarted', currentLanguage);
+        } catch (error) {
+          console.error('Game start announcement failed:', error);
+        }
+      }
     });
 
     return () => unsubscribe();
-    // Only depend on gameId; bingoCard is set inside the callback
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gameId]);
+  }, [gameId, gameRoom?.currentCall, gameRoom?.status, voiceEnabled, currentLanguage]);
+
+  useEffect(() => {
+    // Load voice settings
+    const settings = voiceService.loadSettings();
+    setVoiceEnabled(settings.enabled);
+    setCurrentLanguage(languageService.getCurrentLanguage());
+  }, []);
 
   const handleMarkSquare = useCallback(
     (column: keyof Omit<BingoCard, 'id' | 'playerId'>, index: number) => {
@@ -53,14 +84,19 @@ const GameRoom: React.FC = () => {
         // Check for win
         const winResult = gameService.checkWin(newCard);
         if (winResult.hasWon) {
-          toast.success(`BINGO! You won with a ${winResult.pattern}!`);
-          // Handle win logic here
+          // Announce win in selected language
+          const winMessage = `${currentLanguage.phrases.bingo} ${currentLanguage.phrases.congratulations}`;
+          toast.success(winMessage);
+          
+          if (voiceEnabled) {
+            voiceService.speakGameEvent('bingo', currentLanguage);
+          }
         }
 
         return newCard;
       });
     },
-    [bingoCard]
+    [bingoCard, currentLanguage, voiceEnabled]
   );
 
   const handleStartGame = async () => {
@@ -68,9 +104,26 @@ const GameRoom: React.FC = () => {
 
     try {
       await gameService.startGame(gameId);
-      toast.success('Game starting!');
+      toast.success(currentLanguage.phrases.gameStarting);
+      
+      if (voiceEnabled) {
+        await voiceService.speakGameEvent('gameStarting', currentLanguage);
+      }
     } catch (error) {
       toast.error('Failed to start game');
+    }
+  };
+
+  const toggleVoice = () => {
+    const newVoiceEnabled = !voiceEnabled;
+    setVoiceEnabled(newVoiceEnabled);
+    voiceService.updateSettings({ enabled: newVoiceEnabled });
+    
+    if (newVoiceEnabled) {
+      toast.success('Voice announcements enabled');
+    } else {
+      toast.success('Voice announcements disabled');
+      voiceService.stop(); // Stop any ongoing speech
     }
   };
 
@@ -137,26 +190,49 @@ const GameRoom: React.FC = () => {
               </h1>
               <p className="text-white/80">
                 {gameRoom?.status === 'waiting'
-                  ? 'Waiting for players to join'
+                  ? currentLanguage.phrases.waitingForPlayers
                   : gameRoom?.status === 'starting'
-                  ? 'Game starting soon...'
-                  : 'Game in progress'}
+                  ? currentLanguage.phrases.gameStarting
+                  : currentLanguage.phrases.gameStarted}
               </p>
             </div>
           </div>
 
-          {/* Game Stats */}
-          <div className="flex items-center space-x-6">
-            <div className="text-center">
-              <div className="text-white/60 text-sm">Players</div>
-              <div className="text-white font-bold">
-                {gameRoom?.players.length}/{gameRoom?.maxPlayers}
+          {/* Voice and Language Controls */}
+          <div className="flex items-center space-x-4">
+            <button
+              onClick={toggleVoice}
+              className={`p-3 rounded-lg transition-all ${
+                voiceEnabled 
+                  ? 'bg-green-500/20 text-green-400 hover:bg-green-500/30' 
+                  : 'bg-red-500/20 text-red-400 hover:bg-red-500/30'
+              }`}
+              title={voiceEnabled ? 'Disable voice' : 'Enable voice'}
+            >
+              {voiceEnabled ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
+            </button>
+            
+            <button
+              onClick={() => setShowVoiceSettings(true)}
+              className="p-3 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-colors"
+              title="Voice & Language Settings"
+            >
+              <Settings className="w-5 h-5" />
+            </button>
+
+            {/* Game Stats */}
+            <div className="flex items-center space-x-6">
+              <div className="text-center">
+                <div className="text-white/60 text-sm">Players</div>
+                <div className="text-white font-bold">
+                  {gameRoom?.players.length}/{gameRoom?.maxPlayers}
+                </div>
               </div>
-            </div>
-            <div className="text-center">
-              <div className="text-white/60 text-sm">Prize Pool</div>
-              <div className="text-yellow-400 font-bold">
-                {formatCurrency(gameRoom?.prizePool ?? 0)}
+              <div className="text-center">
+                <div className="text-white/60 text-sm">Prize Pool</div>
+                <div className="text-yellow-400 font-bold">
+                  {formatCurrency(gameRoom?.prizePool ?? 0)}
+                </div>
               </div>
             </div>
           </div>
@@ -183,7 +259,9 @@ const GameRoom: React.FC = () => {
           <div className="lg:col-span-2 space-y-6">
             {/* Current Call */}
             <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 border border-white/20">
-              <h3 className="text-white text-lg font-semibold mb-4">Current Call</h3>
+              <h3 className="text-white text-lg font-semibold mb-4">
+                {currentLanguage.phrases.numberCalled || 'Current Call'}
+              </h3>
               {gameRoom?.currentCall ? (
                 <div className="text-center">
                   <div
@@ -194,13 +272,16 @@ const GameRoom: React.FC = () => {
                     {gameRoom.currentCall}
                   </div>
                   <p className="text-white/80 text-lg font-semibold">
+                    {currentLanguage.getLetterText(getLetterForNumber(gameRoom.currentCall))}-{currentLanguage.getNumberText(gameRoom.currentCall)}
+                  </p>
+                  <p className="text-white/60 text-sm mt-2">
                     {getLetterForNumber(gameRoom.currentCall)}-{gameRoom.currentCall}
                   </p>
                 </div>
               ) : (
                 <div className="text-center text-white/60">
                   {gameRoom?.status === 'waiting'
-                    ? 'Waiting for game to start'
+                    ? currentLanguage.phrases.waitingForPlayers
                     : 'No number called yet'}
                 </div>
               )}
@@ -276,6 +357,7 @@ const GameRoom: React.FC = () => {
                     className={`${getNumberColor(
                       number
                     )} text-white text-center py-1 px-2 rounded text-sm font-semibold`}
+                    title={`${getLetterForNumber(number)}-${number}`}
                   >
                     {number}
                   </div>
@@ -287,6 +369,12 @@ const GameRoom: React.FC = () => {
             </div>
           </div>
         </div>
+
+        {/* Voice Settings Modal */}
+        <VoiceSettings
+          isOpen={showVoiceSettings}
+          onClose={() => setShowVoiceSettings(false)}
+        />
       </div>
     </div>
   );

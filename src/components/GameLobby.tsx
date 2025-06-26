@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Users, Trophy, Clock, DollarSign, LogOut, Wallet } from 'lucide-react';
+import { Plus, Users, Trophy, Clock, DollarSign, LogOut, Wallet, Volume2, Settings } from 'lucide-react';
 import { auth } from '../firebase/config';
 import { signOut } from 'firebase/auth';
 import { gameService } from '../services/gameService';
 import { walletService } from '../services/walletService';
+import { languageService } from '../services/languageService';
+import { voiceService } from '../services/voiceService';
 import { GameRoom } from '../types/game';
 import { Wallet as WalletType } from '../types/wallet';
 import CreateGameModal from './CreateGameModal';
+import VoiceSettings from './VoiceSettings';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 
@@ -18,7 +21,9 @@ const GameLobby: React.FC<GameLobbyProps> = ({ onShowGameList }) => {
   const [gameRooms, setGameRooms] = useState<GameRoom[]>([]);
   const [wallet, setWallet] = useState<WalletType | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showVoiceSettings, setShowVoiceSettings] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [currentLanguage, setCurrentLanguage] = useState(languageService.getCurrentLanguage());
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -39,6 +44,11 @@ const GameLobby: React.FC<GameLobbyProps> = ({ onShowGameList }) => {
     );
 
     return () => unsubscribeWallet();
+  }, []);
+
+  useEffect(() => {
+    // Update language when it changes
+    setCurrentLanguage(languageService.getCurrentLanguage());
   }, []);
 
   const handleJoinGame = async (gameRoom: GameRoom) => {
@@ -127,9 +137,9 @@ const GameLobby: React.FC<GameLobbyProps> = ({ onShowGameList }) => {
 
   const getStatusText = (status: string) => {
     switch (status) {
-      case 'waiting': return 'Waiting for Players';
-      case 'starting': return 'Starting Soon';
-      case 'playing': return 'In Progress';
+      case 'waiting': return currentLanguage.phrases.waitingForPlayers || 'Waiting for Players';
+      case 'starting': return currentLanguage.phrases.gameStarting || 'Starting Soon';
+      case 'playing': return currentLanguage.phrases.gameStarted || 'In Progress';
       default: return 'Unknown';
     }
   };
@@ -145,9 +155,24 @@ const GameLobby: React.FC<GameLobbyProps> = ({ onShowGameList }) => {
                 MULTIPLAYER BINGO
               </span>
             </h1>
-            <p className="text-white/80 text-lg">Join games, win prizes, have fun!</p>
+            <p className="text-white/80 text-lg">
+              {currentLanguage.code === 'am-ET' ? 'ጨዋታዎችን ተቀላቀሉ፣ ሽልማቶችን ያሸንፉ፣ ይዝናኑ!' :
+               currentLanguage.code === 'om-ET' ? 'Taphoota makamuu, badhaasa mo\'aa, gammadaa!' :
+               currentLanguage.code === 'ti-ET' ? 'ጸወታታት ተሳተፉ፣ ሽልማት ዓወቱ፣ ተዘናጉዑ!' :
+               'Join games, win prizes, have fun!'}
+            </p>
           </div>
           <div className="flex items-center space-x-4">
+            {/* Voice Settings Button */}
+            <button
+              onClick={() => setShowVoiceSettings(true)}
+              className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-all transform hover:scale-105"
+              title="Voice & Language Settings"
+            >
+              <Volume2 className="w-4 h-4" />
+              <span>{currentLanguage.nativeName}</span>
+            </button>
+
             {/* Wallet Balance */}
             <button
               onClick={() => navigate('/wallet')}
@@ -313,6 +338,12 @@ const GameLobby: React.FC<GameLobbyProps> = ({ onShowGameList }) => {
             }}
           />
         )}
+
+        {/* Voice Settings Modal */}
+        <VoiceSettings
+          isOpen={showVoiceSettings}
+          onClose={() => setShowVoiceSettings(false)}
+        />
       </div>
     </div>
   );
