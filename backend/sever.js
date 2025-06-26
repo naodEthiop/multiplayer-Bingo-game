@@ -11,7 +11,7 @@ app.post('/api/initiate-subscription', async (req, res) => {
   try {
     // Prepare Telebirr subscription payload (adjust fields as per Telebirr docs)
     const payload = {
-      appId: process.env.TELEBIRR_APP_ID,
+      // appId: process.env.TELEBIRR_APP_ID,
       outTradeNo: req.body.subscriptionId, // unique subscription/order ID
       subject: req.body.subject, // e.g. "Bingo Game Monthly Subscription"
       totalAmount: req.body.amount, // subscription amount
@@ -30,7 +30,7 @@ app.post('/api/initiate-subscription', async (req, res) => {
       payload,
       {
         headers: {
-          'App-Key': process.env.TELEBIRR_APP_KEY,
+          // 'App-Key': process.env.TELEBIRR_APP_KEY,
           'App-Secret': process.env.TELEBIRR_APP_SECRET,
           'Content-Type': 'application/json'
         }
