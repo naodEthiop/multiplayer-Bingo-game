@@ -1,10 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Users, Trophy, Clock, DollarSign, LogOut } from 'lucide-react';
+import { Plus, Users, Trophy, Clock, DollarSign, LogOut, Wallet, Volume2, Settings } from 'lucide-react';
 import { auth } from '../firebase/config';
 import { signOut } from 'firebase/auth';
 import { gameService } from '../services/gameService';
+import { walletService } from '../services/walletService';
+import { languageService } from '../services/languageService';
+import { voiceService } from '../services/voiceService';
 import { GameRoom } from '../types/game';
+import { Wallet as WalletType } from '../types/wallet';
 import CreateGameModal from './CreateGameModal';
+import VoiceSettings from './VoiceSettings';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 
@@ -14,8 +19,11 @@ interface GameLobbyProps {
 
 const GameLobby: React.FC<GameLobbyProps> = ({ onShowGameList }) => {
   const [gameRooms, setGameRooms] = useState<GameRoom[]>([]);
+  const [wallet, setWallet] = useState<WalletType | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showVoiceSettings, setShowVoiceSettings] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [currentLanguage, setCurrentLanguage] = useState(languageService.getCurrentLanguage());
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -27,12 +35,61 @@ const GameLobby: React.FC<GameLobbyProps> = ({ onShowGameList }) => {
     return () => unsubscribe();
   }, []);
 
+  useEffect(() => {
+    if (!auth.currentUser) return;
+
+    const unsubscribeWallet = walletService.subscribeToWallet(
+      auth.currentUser.uid,
+      setWallet
+    );
+
+    return () => unsubscribeWallet();
+  }, []);
+
+  useEffect(() => {
+    // Update language when it changes
+    setCurrentLanguage(languageService.getCurrentLanguage());
+  }, []);
+
   const handleJoinGame = async (gameRoom: GameRoom) => {
     if (!auth.currentUser) return;
 
+    // Check wallet balance if game has entry fee
     if (gameRoom.entryFee > 0) {
-      navigate(`/payment/${gameRoom.id}`);
+      if (!wallet || wallet.balance < gameRoom.entryFee) {
+        toast.error('Insufficient balance. Please deposit funds first.');
+        navigate('/wallet');
+        return;
+      }
+
+      try {
+        // Place bet (deduct entry fee from wallet)
+        await walletService.placeBet(
+          auth.currentUser.uid,
+          gameRoom.id,
+          gameRoom.entryFee,
+          { gameType: 'bingo', gameName: gameRoom.name }
+        );
+
+        // Join the game
+        const player = {
+          id: auth.currentUser.uid,
+          name: auth.currentUser.displayName || 'Anonymous',
+          email: auth.currentUser.email || '',
+          isOnline: true,
+          avatar: auth.currentUser.photoURL || '',
+          telegramId: '',
+        };
+
+        await gameService.joinGameRoom(gameRoom.id, player);
+        navigate(`/game/${gameRoom.id}`);
+        toast.success('Joined game successfully!');
+      } catch (error) {
+        console.error('Error joining game:', error);
+        toast.error('Failed to join game');
+      }
     } else {
+      // Free game - join directly
       try {
         const player = {
           id: auth.currentUser.uid,
@@ -40,8 +97,7 @@ const GameLobby: React.FC<GameLobbyProps> = ({ onShowGameList }) => {
           email: auth.currentUser.email || '',
           isOnline: true,
           avatar: auth.currentUser.photoURL || '',
-          telegramId: '', // Optional, if using Telegram integration
-          // joinedAt: new Date()
+          telegramId: '',
         };
 
         await gameService.joinGameRoom(gameRoom.id, player);
@@ -81,9 +137,9 @@ const GameLobby: React.FC<GameLobbyProps> = ({ onShowGameList }) => {
 
   const getStatusText = (status: string) => {
     switch (status) {
-      case 'waiting': return 'Waiting for Players';
-      case 'starting': return 'Starting Soon';
-      case 'playing': return 'In Progress';
+      case 'waiting': return currentLanguage.phrases.waitingForPlayers || 'Waiting for Players';
+      case 'starting': return currentLanguage.phrases.gameStarting || 'Starting Soon';
+      case 'playing': return currentLanguage.phrases.gameStarted || 'In Progress';
       default: return 'Unknown';
     }
   };
@@ -99,9 +155,33 @@ const GameLobby: React.FC<GameLobbyProps> = ({ onShowGameList }) => {
                 MULTIPLAYER BINGO
               </span>
             </h1>
-            <p className="text-white/80 text-lg">Join games, win prizes, have fun!</p>
+            <p className="text-white/80 text-lg">
+              {currentLanguage.code === 'am-ET' ? 'ጨዋታዎችን ተቀላቀሉ፣ ሽልማቶችን ያሸንፉ፣ ይዝናኑ!' :
+               currentLanguage.code === 'om-ET' ? 'Taphoota makamuu, badhaasa mo\'aa, gammadaa!' :
+               currentLanguage.code === 'ti-ET' ? 'ጸወታታት ተሳተፉ፣ ሽልማት ዓወቱ፣ ተዘናጉዑ!' :
+               'Join games, win prizes, have fun!'}
+            </p>
           </div>
           <div className="flex items-center space-x-4">
+            {/* Voice Settings Button */}
+            <button
+              onClick={() => setShowVoiceSettings(true)}
+              className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-all transform hover:scale-105"
+              title="Voice & Language Settings"
+            >
+              <Volume2 className="w-4 h-4" />
+              <span>{currentLanguage.nativeName}</span>
+            </button>
+
+            {/* Wallet Balance */}
+            <button
+              onClick={() => navigate('/wallet')}
+              className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-all transform hover:scale-105"
+            >
+              <Wallet className="w-4 h-4" />
+              <span>{formatCurrency(wallet?.balance || 0)}</span>
+            </button>
+            
             <div className="text-white text-right">
               <p className="text-sm opacity-80">Welcome back,</p>
               <p className="font-semibold">{auth.currentUser?.displayName || 'Player'}</p>
@@ -123,6 +203,13 @@ const GameLobby: React.FC<GameLobbyProps> = ({ onShowGameList }) => {
             <p className="text-sm opacity-80">Find a game or create your own</p>
           </div>
           <div className="flex space-x-2">
+            <button
+              onClick={() => navigate('/wallet')}
+              className="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white px-4 py-2 rounded-lg font-semibold flex items-center space-x-2 transition-all transform hover:scale-105"
+            >
+              <Wallet className="w-5 h-5" />
+              <span>Wallet</span>
+            </button>
             <button
               onClick={onShowGameList}
               className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white px-4 py-2 rounded-lg font-semibold flex items-center space-x-2 transition-all transform hover:scale-105"
@@ -251,6 +338,12 @@ const GameLobby: React.FC<GameLobbyProps> = ({ onShowGameList }) => {
             }}
           />
         )}
+
+        {/* Voice Settings Modal */}
+        <VoiceSettings
+          isOpen={showVoiceSettings}
+          onClose={() => setShowVoiceSettings(false)}
+        />
       </div>
     </div>
   );

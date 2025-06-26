@@ -1,7 +1,7 @@
 {
   "name": "backend",
   "version": "1.0.0",
-  "main": "sever.js",
+  "main": "server.js",
   "type": "commonjs",
   "dependencies": {
     "axios": "^1.10.0",
