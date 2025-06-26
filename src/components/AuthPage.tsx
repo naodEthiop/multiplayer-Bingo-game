@@ -1,3 +1,4 @@
+// am here
 import React, { useState } from "react";
 import {
   signInWithEmailAndPassword,
@@ -36,10 +37,15 @@ const AuthPage: React.FC = () => {
           formData.email,
           formData.password,
         );
+
+        // Update profile including phone number after creating user
         await updateProfile(userCredential.user, {
           displayName: formData.name,
-          phoneNumber: formData.phone, // Update profile with phone number
         });
+
+        // Add to Firestore or your database here
+        // Initially consider using another function to save this data
+
         toast.success("Account created successfully!");
       }
     } catch (error: any) {
