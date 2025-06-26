@@ -1,7 +1,3 @@
-The requested changes involve adding back navigation to the wallet page using React Router's useNavigate hook and an ArrowLeft icon for the back button.
-```
-
-```replit_final_file
 import React, { useState, useEffect } from 'react';
 import { 
   Wallet, 
@@ -25,6 +21,7 @@ import DepositModal from './DepositModal';
 import WithdrawalModal from './WithdrawalModal';
 import TransactionHistory from './TransactionHistory';
 import toast from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom'; // Import useNavigate
 
 interface WalletPageProps {
   user: any;
@@ -40,6 +37,8 @@ const WalletPage: React.FC<WalletPageProps> = ({ user, onNavigate, onBack }) => 
   const [showDepositModal, setShowDepositModal] = useState(false);
   const [showWithdrawalModal, setShowWithdrawalModal] = useState(false);
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate(); // Initialize useNavigate
+
 
   useEffect(() => {
     if (!auth.currentUser) return;
@@ -113,14 +112,12 @@ const WalletPage: React.FC<WalletPageProps> = ({ user, onNavigate, onBack }) => 
         {/* Header */}
         <div className="flex justify-between items-center mb-8">
           <div className="flex items-center space-x-4">
-            {onBack && (
-              <button
-                onClick={onBack}
-                className="bg-white/10 hover:bg-white/20 text-white p-2 rounded-lg transition-colors"
-              >
-                <ArrowLeft className="w-5 h-5" />
-              </button>
-            )}
+            <button
+              onClick={() => navigate(-1)}
+              className="bg-white/10 hover:bg-white/20 text-white p-2 rounded-lg transition-colors"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
             <div>
               <h1 className="text-4xl font-bold text-white mb-2">
                 <span className="bg-gradient-to-r from-yellow-400 to-orange-500 bg-clip-text text-transparent">
@@ -275,4 +272,3 @@ const WalletPage: React.FC<WalletPageProps> = ({ user, onNavigate, onBack }) => 
 };
 
 export default WalletPage;
-`
