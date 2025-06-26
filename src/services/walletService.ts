@@ -1,4 +1,3 @@
-
 import { 
   collection, 
   doc, 
@@ -63,7 +62,7 @@ class WalletService {
   subscribeToWallet(userId: string, callback: (wallet: Wallet | null) => void): () => void {
     try {
       const walletRef = doc(db, 'wallets', userId);
-      
+
       return onSnapshot(walletRef, (doc) => {
         if (doc.exists()) {
           callback({ id: doc.id, ...doc.data() } as Wallet);
@@ -112,10 +111,10 @@ class WalletService {
   async updateBalance(userId: string, amount: number, operation: 'add' | 'subtract' = 'add'): Promise<boolean> {
     try {
       const walletRef = doc(db, 'wallets', userId);
-      
+
       return await runTransaction(db, async (transaction) => {
         const walletDoc = await transaction.get(walletRef);
-        
+
         if (!walletDoc.exists()) {
           throw new Error('Wallet does not exist');
         }
@@ -179,7 +178,7 @@ class WalletService {
 
       // Update wallet balance
       const success = await this.updateBalance(userId, amount, 'add');
-      
+
       if (success) {
         // Update transaction status
         await updateDoc(doc(db, 'transactions', transactionId), {
@@ -227,7 +226,7 @@ class WalletService {
 
       // Update wallet balance
       const success = await this.updateBalance(userId, amount, 'subtract');
-      
+
       if (success) {
         // Update transaction status
         await updateDoc(doc(db, 'transactions', transactionId), {
