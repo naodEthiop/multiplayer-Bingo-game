@@ -1,3 +1,4 @@
+
 export interface Wallet {
   id: string;
   userId: string;
@@ -27,15 +28,22 @@ export interface Transaction {
 
 export interface PaymentMethod {
   id: string;
-  userId: string;
-  type: 'bank' | 'mobile_money' | 'card';
+  type: 'telebirr' | 'cbe_birr' | 'bank_transfer';
   name: string;
-  details: {
-    accountNumber?: string;
-    bankName?: string;
-    phoneNumber?: string;
-    cardLast4?: string;
+  details: { 
+    provider?: string;
+    type?: string;
   };
-  isDefault: boolean;
-  createdAt: Date;
+  isActive: boolean;
+  fees: {
+    deposit: { fixed: number; percentage: number };
+    withdrawal: { fixed: number; percentage: number };
+  };
+  limits: {
+    minDeposit: number;
+    maxDeposit: number;
+    minWithdrawal: number;
+    maxWithdrawal: number;
+    dailyLimit: number;
+  };
 }

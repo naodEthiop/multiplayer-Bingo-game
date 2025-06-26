@@ -1,3 +1,4 @@
+
 import { 
   collection, 
   doc, 
@@ -49,18 +50,18 @@ export const walletService = {
 
   // Subscribe to transactions
   subscribeToTransactions: (userId: string, callback: (transactions: Transaction[]) => void) => {
-    const transactionsRef = collection(db, 'transactions');
     const q = query(
-      transactionsRef,
+      collection(db, 'transactions'),
       where('userId', '==', userId),
       orderBy('createdAt', 'desc')
     );
 
-    return onSnapshot(q, (querySnapshot) => {
-      const transactions: Transaction[] = [];
-      querySnapshot.forEach((doc) => {
-        transactions.push({ id: doc.id, ...doc.data() } as Transaction);
-      });
+    return onSnapshot(q, (snapshot) => {
+      const transactions = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        createdAt: doc.data().createdAt?.toDate() || new Date()
+      })) as Transaction[];
       callback(transactions);
     }, (error) => {
       console.error('Failed to subscribe to transactions:', error);
@@ -71,13 +72,10 @@ export const walletService = {
   // Add transaction
   addTransaction: async (transaction: Omit<Transaction, 'id' | 'createdAt'>) => {
     try {
-      const transactionsRef = collection(db, 'transactions');
-      const newTransaction = {
+      const docRef = await addDoc(collection(db, 'transactions'), {
         ...transaction,
         createdAt: serverTimestamp()
-      };
-
-      const docRef = await addDoc(transactionsRef, newTransaction);
+      });
       return { success: true, id: docRef.id };
     } catch (error) {
       console.error('Failed to add transaction:', error);
