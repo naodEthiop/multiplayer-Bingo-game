@@ -12,7 +12,8 @@ import {
   serverTimestamp,
   increment,
   runTransaction,
-  onSnapshot
+  onSnapshot,
+  Timestamp
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { Wallet, Transaction, PaymentMethod, WithdrawalRequest, BettingLimits } from '../types/wallet';
@@ -208,22 +209,27 @@ class WalletService {
 
       const withdrawalData = withdrawalDoc.data() as WithdrawalRequest;
 
-      // Find associated transaction
+      // Find associated transaction - simplified query
       const transactionsQuery = query(
         collection(db, 'transactions'),
-        where('metadata.withdrawalRequestId', '==', withdrawalRequestId),
+        where('userId', '==', withdrawalData.userId),
         where('type', '==', 'withdrawal'),
-        limit(1)
+        orderBy('createdAt', 'desc'),
+        limit(10)
       );
       
       const transactionSnapshot = await getDocs(transactionsQuery);
-      if (transactionSnapshot.empty) {
+      const associatedTransaction = transactionSnapshot.docs.find(doc => {
+        const data = doc.data() as Transaction;
+        return data.metadata?.withdrawalRequestId === withdrawalRequestId;
+      });
+
+      if (!associatedTransaction) {
         throw new Error('Associated transaction not found');
       }
 
-      const transactionDoc = transactionSnapshot.docs[0];
-      const transactionData = transactionDoc.data() as Transaction;
-      const transactionRef = doc(db, 'transactions', transactionDoc.id);
+      const transactionData = associatedTransaction.data() as Transaction;
+      const transactionRef = doc(db, 'transactions', associatedTransaction.id);
 
       // Update withdrawal request
       transaction.update(withdrawalRef, {
@@ -390,23 +396,29 @@ class WalletService {
       throw new Error(`Maximum withdrawal amount is ${paymentMethod.limits.maxWithdrawal}`);
     }
 
-    // Check daily limits
+    // Check daily limits - simplified query
     const today = new Date();
     today.setHours(0, 0, 0, 0);
+    const todayTimestamp = Timestamp.fromDate(today);
     
     const q = query(
       collection(db, 'transactions'),
       where('userId', '==', userId),
       where('type', '==', 'withdrawal'),
-      where('createdAt', '>=', today),
-      where('status', 'in', ['completed', 'processing'])
+      where('createdAt', '>=', todayTimestamp),
+      limit(50)
     );
 
     const snapshot = await getDocs(q);
-    const dailyTotal = snapshot.docs.reduce((total, doc) => {
-      const data = doc.data() as Transaction;
-      return total + (data.metadata?.originalAmount || data.amount);
-    }, 0);
+    const dailyTotal = snapshot.docs
+      .filter(doc => {
+        const data = doc.data() as Transaction;
+        return data.status === 'completed' || data.status === 'processing';
+      })
+      .reduce((total, doc) => {
+        const data = doc.data() as Transaction;
+        return total + (data.metadata?.originalAmount || data.amount);
+      }, 0);
 
     if (dailyTotal + amount > paymentMethod.limits.dailyLimit) {
       throw new Error(`Daily withdrawal limit exceeded`);
@@ -437,15 +449,17 @@ class WalletService {
       throw new Error(`Maximum bet amount is ${limits.maxBetAmount}`);
     }
 
-    // Check daily limit
+    // Check daily limit - simplified query
     const today = new Date();
     today.setHours(0, 0, 0, 0);
+    const todayTimestamp = Timestamp.fromDate(today);
     
     const dailyBetsQuery = query(
       collection(db, 'transactions'),
       where('userId', '==', userId),
       where('type', '==', 'bet'),
-      where('createdAt', '>=', today)
+      where('createdAt', '>=', todayTimestamp),
+      limit(50)
     );
 
     const dailySnapshot = await getDocs(dailyBetsQuery);
