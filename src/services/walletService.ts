@@ -1,149 +1,118 @@
 import { 
   collection, 
-  addDoc, 
-  updateDoc, 
   doc, 
+  onSnapshot, 
+  updateDoc, 
+  addDoc, 
   query, 
   where, 
   orderBy, 
-  limit, 
-  onSnapshot,
-  serverTimestamp 
+  serverTimestamp,
+  getDoc,
+  setDoc
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { Transaction } from '../types/wallet';
+import { Wallet, Transaction } from '../types/wallet';
 
-const API_BASE_URL = 'https://28f0eda4-60c8-4ddb-a036-763cb8fd46c0-00-2bbc1x56d1sdx.worf.replit.dev:5000/api';
+export const walletService = {
+  // Subscribe to wallet changes
+  subscribeToWallet: (userId: string, callback: (wallet: Wallet | null) => void) => {
+    const walletRef = doc(db, 'wallets', userId);
 
-interface PaymentData {
-  amount: number;
-  email: string;
-  first_name: string;
-  last_name: string;
-  userId: string;
-}
-
-class WalletService {
-  async deposit(amount: number, userId: string, userEmail: string = '', firstName: string = '', lastName: string = ''): Promise<string> {
-    try {
-      const paymentData: PaymentData = {
-        amount,
-        email: userEmail || `user-${userId}@bingo.com`,
-        first_name: firstName || 'Bingo',
-        last_name: lastName || 'User',
-        userId
-      };
-
-      const response = await fetch(`${API_BASE_URL}/wallet/deposit`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(paymentData)
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Payment initialization failed');
-      }
-
-      // Record pending transaction
-      await this.recordTransaction({
-        userId,
-        type: 'deposit',
-        amount,
-        status: 'pending',
-        provider: 'chapa',
-        txRef: data.tx_ref,
-        createdAt: serverTimestamp()
-      });
-
-      return data.checkout_url;
-    } catch (error) {
-      console.error('Deposit error:', error);
-      throw error;
-    }
-  }
-
-  async withdraw(amount: number, userId: string, accountNumber: string, bankName: string): Promise<void> {
-    try {
-      const response = await fetch(`${API_BASE_URL}/wallet/withdraw`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+    return onSnapshot(walletRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const walletData = { id: docSnap.id, ...docSnap.data() } as Wallet;
+        callback(walletData);
+      } else {
+        // Create wallet if it doesn't exist
+        const newWallet: Omit<Wallet, 'id'> = {
           userId,
-          amount,
-          accountNumber,
-          bankName
-        })
-      });
+          balance: 0,
+          currency: 'ETB',
+          status: 'active',
+          createdAt: new Date(),
+          updatedAt: new Date()
+        };
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Withdrawal failed');
+        setDoc(walletRef, newWallet).then(() => {
+          callback({ id: userId, ...newWallet });
+        }).catch((error) => {
+          console.error('Failed to create wallet:', error);
+          callback(null);
+        });
       }
+    }, (error) => {
+      console.error('Failed to subscribe to wallet:', error);
+      callback(null);
+    });
+  },
 
-      // Record withdrawal transaction
-      await this.recordTransaction({
-        userId,
-        type: 'withdrawal',
-        amount: -amount,
-        status: 'processing',
-        provider: 'bank_transfer',
-        txRef: data.transactionId,
-        createdAt: serverTimestamp(),
-        metadata: {
-          accountNumber,
-          bankName
-        }
-      });
-
-    } catch (error) {
-      console.error('Withdrawal error:', error);
-      throw error;
-    }
-  }
-
-  async verifyPayment(txRef: string): Promise<boolean> {
-    try {
-      const response = await fetch(`${API_BASE_URL}/verify-payment/${txRef}`);
-      const data = await response.json();
-
-      return data.status === 'success';
-    } catch (error) {
-      console.error('Payment verification error:', error);
-      return false;
-    }
-  }
-
-  private async recordTransaction(transaction: Omit<Transaction, 'id'>): Promise<void> {
-    try {
-      await addDoc(collection(db, 'transactions'), transaction);
-    } catch (error) {
-      console.error('Error recording transaction:', error);
-    }
-  }
-
-  subscribeToTransactions(userId: string, callback: (transactions: Transaction[]) => void) {
+  // Subscribe to transactions
+  subscribeToTransactions: (userId: string, callback: (transactions: Transaction[]) => void) => {
+    const transactionsRef = collection(db, 'transactions');
     const q = query(
-      collection(db, 'transactions'),
+      transactionsRef,
       where('userId', '==', userId),
-      orderBy('createdAt', 'desc'),
-      limit(20)
+      orderBy('createdAt', 'desc')
     );
 
-    return onSnapshot(q, (snapshot) => {
-      const transactions = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as Transaction[];
+    return onSnapshot(q, (querySnapshot) => {
+      const transactions: Transaction[] = [];
+      querySnapshot.forEach((doc) => {
+        transactions.push({ id: doc.id, ...doc.data() } as Transaction);
+      });
       callback(transactions);
+    }, (error) => {
+      console.error('Failed to subscribe to transactions:', error);
+      callback([]);
     });
-  }
-}
+  },
 
-export const walletService = new WalletService();
+  // Add transaction
+  addTransaction: async (transaction: Omit<Transaction, 'id' | 'createdAt'>) => {
+    try {
+      const transactionsRef = collection(db, 'transactions');
+      const newTransaction = {
+        ...transaction,
+        createdAt: serverTimestamp()
+      };
+
+      const docRef = await addDoc(transactionsRef, newTransaction);
+      return { success: true, id: docRef.id };
+    } catch (error) {
+      console.error('Failed to add transaction:', error);
+      return { success: false, error };
+    }
+  },
+
+  // Update wallet balance
+  updateBalance: async (userId: string, newBalance: number) => {
+    try {
+      const walletRef = doc(db, 'wallets', userId);
+      await updateDoc(walletRef, {
+        balance: newBalance,
+        updatedAt: serverTimestamp()
+      });
+      return { success: true };
+    } catch (error) {
+      console.error('Failed to update balance:', error);
+      return { success: false, error };
+    }
+  },
+
+  // Get wallet balance
+  getWallet: async (userId: string): Promise<Wallet | null> => {
+    try {
+      const walletRef = doc(db, 'wallets', userId);
+      const walletSnap = await getDoc(walletRef);
+
+      if (walletSnap.exists()) {
+        return { id: walletSnap.id, ...walletSnap.data() } as Wallet;
+      }
+      return null;
+    } catch (error) {
+      console.error('Failed to get wallet:', error);
+      return null;
+    }
+  }
+};
