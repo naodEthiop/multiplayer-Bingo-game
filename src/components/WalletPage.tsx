@@ -1,3 +1,7 @@
+The requested changes involve adding back navigation to the wallet page using React Router's useNavigate hook and an ArrowLeft icon for the back button.
+```
+
+```replit_final_file
 import React, { useState, useEffect } from 'react';
 import { 
   Wallet, 
@@ -271,3 +275,4 @@ const WalletPage: React.FC<WalletPageProps> = ({ user, onNavigate, onBack }) => 
 };
 
 export default WalletPage;
+`
