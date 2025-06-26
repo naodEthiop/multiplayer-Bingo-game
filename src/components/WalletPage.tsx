@@ -11,7 +11,8 @@ import {
   Eye,
   EyeOff,
   TrendingUp,
-  Shield
+  Shield,
+  ArrowLeft
 } from 'lucide-react';
 import { auth } from '../firebase/config';
 import { walletService } from '../services/walletService';
@@ -21,7 +22,13 @@ import WithdrawalModal from './WithdrawalModal';
 import TransactionHistory from './TransactionHistory';
 import toast from 'react-hot-toast';
 
-const WalletPage: React.FC = () => {
+interface WalletPageProps {
+  user: any;
+  onNavigate: (page: string) => void;
+  onBack?: () => void;
+}
+
+const WalletPage: React.FC<WalletPageProps> = ({ user, onNavigate, onBack }) => {
   const [wallet, setWallet] = useState<WalletType | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [showBalance, setShowBalance] = useState(true);
@@ -62,7 +69,7 @@ const WalletPage: React.FC = () => {
   const getRecentStats = () => {
     const today = new Date();
     const lastWeek = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
-    
+
     const recentTransactions = transactions.filter(t => 
       new Date(t.createdAt) >= lastWeek
     );
@@ -102,12 +109,14 @@ const WalletPage: React.FC = () => {
         {/* Header */}
         <div className="flex justify-between items-center mb-8">
           <div className="flex items-center space-x-4">
-            <button
-              onClick={() => window.history.back()}
-              className="bg-white/10 hover:bg-white/20 text-white p-2 rounded-lg transition-colors"
-            >
-              <ArrowDownLeft className="w-5 h-5 rotate-90" />
-            </button>
+            {onBack && (
+              <button
+                onClick={onBack}
+                className="bg-white/10 hover:bg-white/20 text-white p-2 rounded-lg transition-colors"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </button>
+            )}
             <div>
               <h1 className="text-4xl font-bold text-white mb-2">
                 <span className="bg-gradient-to-r from-yellow-400 to-orange-500 bg-clip-text text-transparent">
@@ -129,7 +138,7 @@ const WalletPage: React.FC = () => {
         <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl p-8 mb-8 relative overflow-hidden">
           <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-16 translate-x-16"></div>
           <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/5 rounded-full translate-y-12 -translate-x-12"></div>
-          
+
           <div className="relative z-10">
             <div className="flex justify-between items-start mb-6">
               <div>
@@ -238,7 +247,7 @@ const WalletPage: React.FC = () => {
               View All
             </button>
           </div>
-          
+
           <TransactionHistory transactions={transactions.slice(0, 10)} />
         </div>
 

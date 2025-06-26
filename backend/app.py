@@ -1,9 +1,11 @@
 
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, redirect
 from flask_cors import CORS
 import os
 import requests
 from dotenv import load_dotenv
+import time
+import uuid
 
 load_dotenv()
 app = Flask(__name__)
@@ -11,45 +13,84 @@ CORS(app)
 
 CHAPA_SECRET = os.getenv("CHAPA_SECRET_KEY")
 
-@app.route('/api/wallet/deposit', methods=['POST'])
-def create_deposit():
+@app.route('/api/create-payment', methods=['POST'])
+def create_payment():
+    data = request.json
+    tx_ref = f"bingo-{uuid.uuid4()}"
+    
+    payload = {
+        "amount": data.get("amount"),
+        "currency": "ETB",
+        "email": data.get("email"),
+        "first_name": data.get("first_name"),
+        "last_name": data.get("last_name"),
+        "tx_ref": tx_ref,
+        "callback_url": "https://28f0eda4-60c8-4ddb-a036-763cb8fd46c0-00-2bbc1x56d1sdx.worf.replit.dev:5000/api/payment-callback",
+        "return_url": "https://28f0eda4-60c8-4ddb-a036-763cb8fd46c0-00-2bbc1x56d1sdx.worf.replit.dev/payment-complete",
+        "customization[title]": "Bingo Game",
+        "customization[description]": "Entry Fee"
+    }
+
+    headers = {
+        "Authorization": f"Bearer {CHAPA_SECRET}"
+    }
+
     try:
-        data = request.json
-        tx_ref = f"DEP-{data.get('userId')}-{int(__import__('time').time())}"
-        
-        payload = {
-            "amount": data.get("amount"),
-            "currency": "ETB",
-            "email": data.get("email", "user@example.com"),
-            "first_name": data.get("firstName", "User"),
-            "last_name": data.get("lastName", "Player"),
-            "tx_ref": tx_ref,
-            "callback_url": "http://0.0.0.0:5000/api/payment-callback",
-            "return_url": "http://0.0.0.0:5173/wallet?payment=success",
-            "customization[title]": "Bingo Game Deposit",
-            "customization[description]": f"Wallet deposit via {data.get('paymentMethod', {}).get('name', 'Payment')}"
-        }
-
-        headers = {
-            "Authorization": f"Bearer {CHAPA_SECRET}",
-            "Content-Type": "application/json"
-        }
-
         response = requests.post("https://api.chapa.co/v1/transaction/initialize",
-                                headers=headers, json=payload)
+                                 headers=headers, json=payload)
         chapa_res = response.json()
 
         if chapa_res.get("status") != "success":
-            return jsonify({"error": chapa_res.get("message", "Payment initialization failed")}), 400
+            return jsonify({"error": chapa_res.get("message", "Unknown error")}), 400
 
         return jsonify({
-            "success": True,
             "checkout_url": chapa_res["data"]["checkout_url"],
-            "transactionId": tx_ref
+            "tx_ref": tx_ref
         })
 
     except Exception as e:
-        print(f"Deposit error: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/wallet/deposit', methods=['POST'])
+def deposit():
+    try:
+        data = request.json
+        user_id = data.get('userId')
+        amount = data.get('amount')
+        
+        # Create payment with Chapa
+        tx_ref = f"deposit-{user_id}-{int(time.time())}"
+        
+        payload = {
+            "amount": amount,
+            "currency": "ETB",
+            "email": data.get("email", f"user-{user_id}@bingo.com"),
+            "first_name": data.get("first_name", "Bingo"),
+            "last_name": data.get("last_name", "User"),
+            "tx_ref": tx_ref,
+            "callback_url": f"https://28f0eda4-60c8-4ddb-a036-763cb8fd46c0-00-2bbc1x56d1sdx.worf.replit.dev:5000/api/payment-callback",
+            "return_url": f"https://28f0eda4-60c8-4ddb-a036-763cb8fd46c0-00-2bbc1x56d1sdx.worf.replit.dev/wallet",
+            "customization[title]": "Bingo Game - Wallet Deposit",
+            "customization[description]": "Add funds to wallet"
+        }
+
+        headers = {
+            "Authorization": f"Bearer {CHAPA_SECRET}"
+        }
+
+        response = requests.post("https://api.chapa.co/v1/transaction/initialize",
+                                 headers=headers, json=payload)
+        chapa_res = response.json()
+
+        if chapa_res.get("status") != "success":
+            return jsonify({"error": chapa_res.get("message", "Unknown error")}), 400
+
+        return jsonify({
+            "checkout_url": chapa_res["data"]["checkout_url"],
+            "tx_ref": tx_ref
+        })
+
+    except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/wallet/withdraw', methods=['POST'])
@@ -65,7 +106,7 @@ def process_withdrawal():
         
         return jsonify({
             "success": True,
-            "transactionId": f"WTH-{data.get('userId')}-{int(__import__('time').time())}",
+            "transactionId": f"WTH-{data.get('userId')}-{int(time.time())}",
             "status": "processing",
             "message": "Withdrawal request submitted successfully"
         })
@@ -92,24 +133,20 @@ def payment_callback():
 
 @app.route('/api/verify-payment/<tx_ref>', methods=['GET'])
 def verify_payment(tx_ref):
+    headers = {
+        "Authorization": f"Bearer {CHAPA_SECRET}"
+    }
+    
     try:
-        headers = {
-            "Authorization": f"Bearer {CHAPA_SECRET}"
-        }
-        
         response = requests.get(f"https://api.chapa.co/v1/transaction/verify/{tx_ref}",
-                               headers=headers)
-        chapa_res = response.json()
-        
-        return jsonify(chapa_res)
-        
+                                headers=headers)
+        return jsonify(response.json())
     except Exception as e:
-        print(f"Verification error: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 @app.route('/health', methods=['GET'])
 def health_check():
-    return jsonify({"status": "healthy", "service": "bingo-wallet-api"})
+    return jsonify({"status": "healthy", "service": "bingo-backend"})
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
