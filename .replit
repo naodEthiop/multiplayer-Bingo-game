@@ -16,7 +16,7 @@ mode = "sequential"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd backend && python app.py"
+args = "cd backend && pip install -r requirements.txt && python app.py"
 
 [[workflows.workflow]]
 name = "Start Backend"
@@ -34,3 +34,7 @@ externalPort = 80
 [[ports]]
 localPort = 5174
 externalPort = 3000
+
+[[ports]]
+localPort = 5175
+externalPort = 3001
