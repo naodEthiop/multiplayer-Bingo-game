@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Users, Trophy, Clock, DollarSign, LogOut, Wallet, Volume2, Settings } from 'lucide-react';
+import { Plus, Users, Trophy, Clock, DollarSign, LogOut, Wallet, Volume2, Settings, Wifi, WifiOff } from 'lucide-react';
 import { auth } from '../firebase/config';
 import { signOut } from 'firebase/auth';
 import { gameService } from '../services/gameService';
@@ -23,27 +23,69 @@ const GameLobby: React.FC<GameLobbyProps> = ({ onShowGameList }) => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showVoiceSettings, setShowVoiceSettings] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [connectionStatus, setConnectionStatus] = useState<'online' | 'offline' | 'connecting'>('connecting');
   const [currentLanguage, setCurrentLanguage] = useState(languageService.getCurrentLanguage());
   const navigate = useNavigate();
 
   useEffect(() => {
-    const unsubscribe = gameService.subscribeToGameRooms((rooms) => {
-      setGameRooms(rooms);
-      setLoading(false);
-    });
+    let unsubscribeGameRooms: (() => void) | null = null;
+    
+    const setupGameRoomsSubscription = () => {
+      try {
+        unsubscribeGameRooms = gameService.subscribeToGameRooms((rooms) => {
+          setGameRooms(rooms);
+          setLoading(false);
+          setConnectionStatus('online');
+        });
+      } catch (error) {
+        console.error('Failed to subscribe to game rooms:', error);
+        setConnectionStatus('offline');
+        setLoading(false);
+        
+        // Retry after 5 seconds
+        setTimeout(setupGameRoomsSubscription, 5000);
+      }
+    };
 
-    return () => unsubscribe();
+    setupGameRoomsSubscription();
+
+    return () => {
+      if (unsubscribeGameRooms) {
+        unsubscribeGameRooms();
+      }
+    };
   }, []);
 
   useEffect(() => {
     if (!auth.currentUser) return;
 
-    const unsubscribeWallet = walletService.subscribeToWallet(
-      auth.currentUser.uid,
-      setWallet
-    );
+    let unsubscribeWallet: (() => void) | null = null;
+    
+    const setupWalletSubscription = () => {
+      try {
+        unsubscribeWallet = walletService.subscribeToWallet(
+          auth.currentUser!.uid,
+          (walletData) => {
+            setWallet(walletData);
+            setConnectionStatus('online');
+          }
+        );
+      } catch (error) {
+        console.error('Failed to subscribe to wallet:', error);
+        setConnectionStatus('offline');
+        
+        // Retry after 5 seconds
+        setTimeout(setupWalletSubscription, 5000);
+      }
+    };
 
-    return () => unsubscribeWallet();
+    setupWalletSubscription();
+
+    return () => {
+      if (unsubscribeWallet) {
+        unsubscribeWallet();
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -51,8 +93,34 @@ const GameLobby: React.FC<GameLobbyProps> = ({ onShowGameList }) => {
     setCurrentLanguage(languageService.getCurrentLanguage());
   }, []);
 
+  // Monitor online/offline status
+  useEffect(() => {
+    const handleOnline = () => {
+      setConnectionStatus('online');
+      toast.success('Connection restored');
+    };
+
+    const handleOffline = () => {
+      setConnectionStatus('offline');
+      toast.error('Connection lost - working offline');
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
   const handleJoinGame = async (gameRoom: GameRoom) => {
     if (!auth.currentUser) return;
+
+    if (connectionStatus === 'offline') {
+      toast.error('Cannot join game while offline. Please check your connection.');
+      return;
+    }
 
     // Check wallet balance if game has entry fee
     if (gameRoom.entryFee > 0) {
@@ -86,7 +154,7 @@ const GameLobby: React.FC<GameLobbyProps> = ({ onShowGameList }) => {
         toast.success('Joined game successfully!');
       } catch (error) {
         console.error('Error joining game:', error);
-        toast.error('Failed to join game');
+        toast.error('Failed to join game. Please try again.');
       }
     } else {
       // Free game - join directly
@@ -105,7 +173,7 @@ const GameLobby: React.FC<GameLobbyProps> = ({ onShowGameList }) => {
         toast.success('Joined game successfully!');
       } catch (error) {
         console.error('Error joining game:', error);
-        toast.error('Failed to join game');
+        toast.error('Failed to join game. Please try again.');
       }
     }
   };
@@ -144,6 +212,14 @@ const GameLobby: React.FC<GameLobbyProps> = ({ onShowGameList }) => {
     }
   };
 
+  const getConnectionIcon = () => {
+    switch (connectionStatus) {
+      case 'online': return <Wifi className="w-4 h-4 text-green-400" />;
+      case 'offline': return <WifiOff className="w-4 h-4 text-red-400" />;
+      case 'connecting': return <div className="w-4 h-4 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin" />;
+    }
+  };
+
   return (
     <div className="min-h-screen p-4">
       <div className="max-w-7xl mx-auto">
@@ -163,6 +239,12 @@ const GameLobby: React.FC<GameLobbyProps> = ({ onShowGameList }) => {
             </p>
           </div>
           <div className="flex items-center space-x-4">
+            {/* Connection Status */}
+            <div className="flex items-center space-x-2 bg-white/10 px-3 py-2 rounded-lg">
+              {getConnectionIcon()}
+              <span className="text-white/80 text-sm capitalize">{connectionStatus}</span>
+            </div>
+
             {/* Voice Settings Button */}
             <button
               onClick={() => setShowVoiceSettings(true)}
@@ -196,6 +278,19 @@ const GameLobby: React.FC<GameLobbyProps> = ({ onShowGameList }) => {
           </div>
         </div>
 
+        {/* Connection Warning */}
+        {connectionStatus === 'offline' && (
+          <div className="bg-red-500/20 border border-red-500/30 rounded-lg p-4 mb-6">
+            <div className="flex items-center space-x-2 text-red-400">
+              <WifiOff className="w-5 h-5" />
+              <span className="font-semibold">Connection Lost</span>
+            </div>
+            <p className="text-white/80 text-sm mt-1">
+              You're currently offline. Some features may not be available. The app will automatically reconnect when your connection is restored.
+            </p>
+          </div>
+        )}
+
         {/* Action Bar */}
         <div className="flex justify-between items-center mb-6">
           <div className="text-white">
@@ -219,7 +314,8 @@ const GameLobby: React.FC<GameLobbyProps> = ({ onShowGameList }) => {
             </button>
             <button
               onClick={() => setShowCreateModal(true)}
-              className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white px-6 py-3 rounded-lg font-semibold flex items-center space-x-2 transition-all transform hover:scale-105"
+              disabled={connectionStatus === 'offline'}
+              className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white px-6 py-3 rounded-lg font-semibold flex items-center space-x-2 transition-all transform hover:scale-105 disabled:transform-none"
             >
               <Plus className="w-5 h-5" />
               <span>Create Game</span>
@@ -305,16 +401,18 @@ const GameLobby: React.FC<GameLobbyProps> = ({ onShowGameList }) => {
                 {/* Join Button */}
                 <button
                   onClick={() => handleJoinGame(room)}
-                  disabled={room.players.length >= room.maxPlayers || room.status !== 'waiting'}
+                  disabled={room.players.length >= room.maxPlayers || room.status !== 'waiting' || connectionStatus === 'offline'}
                   className={`w-full py-3 px-4 rounded-lg font-semibold transition-all ${
-                    room.players.length >= room.maxPlayers || room.status !== 'waiting'
+                    room.players.length >= room.maxPlayers || room.status !== 'waiting' || connectionStatus === 'offline'
                       ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
                       : room.entryFee > 0
                       ? 'bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white transform hover:scale-105'
                       : 'bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white transform hover:scale-105'
                   }`}
                 >
-                  {room.players.length >= room.maxPlayers
+                  {connectionStatus === 'offline'
+                    ? 'Offline'
+                    : room.players.length >= room.maxPlayers
                     ? 'Game Full'
                     : room.status !== 'waiting'
                     ? 'Game Started'
