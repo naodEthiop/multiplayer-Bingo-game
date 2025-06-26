@@ -70,25 +70,30 @@ const DepositModal: React.FC<DepositModalProps> = ({ onClose, wallet }) => {
 
     setLoading(true);
     try {
-      const transactionId = await walletService.initiateDeposit(
-        auth.currentUser.uid,
-        depositAmount,
-        selectedMethod,
-        { source: 'wallet_page' }
-      );
+      // Call Python backend for Chapa payment
+      const response = await fetch('http://0.0.0.0:5000/api/wallet/deposit', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId: auth.currentUser.uid,
+          amount: depositAmount,
+          paymentMethod: selectedMethod,
+          email: auth.currentUser.email,
+          firstName: auth.currentUser.displayName?.split(' ')[0] || 'User',
+          lastName: auth.currentUser.displayName?.split(' ')[1] || 'Player'
+        })
+      });
 
-      // Simulate payment processing (in real app, redirect to payment gateway)
-      setTimeout(async () => {
-        try {
-          await walletService.processDeposit(transactionId, `EXT-${Date.now()}`);
-          toast.success('Deposit successful!');
-          onClose();
-        } catch (error) {
-          toast.error('Deposit failed. Please try again.');
-        }
-      }, 2000);
+      const result = await response.json();
 
-      toast.success('Processing deposit...');
+      if (result.success) {
+        // Redirect to Chapa checkout
+        window.location.href = result.checkout_url;
+      } else {
+        throw new Error(result.error || 'Payment initialization failed');
+      }
     } catch (error: any) {
       toast.error(error.message || 'Deposit failed');
     } finally {

@@ -6,3 +6,27 @@ channel = "stable-24_05"
 
 [deployment]
 run = ["sh", "-c", "npm run dev"]
+
+[workflows]
+
+[[workflows.workflow]]
+name = "Start Backend"
+author = 44302482
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd backend && python app.py"
+
+[[workflows.workflow]]
+name = "Start Backend"
+author = 44302482
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd backend && python app.py"
+
+[[ports]]
+localPort = 5173
+externalPort = 80

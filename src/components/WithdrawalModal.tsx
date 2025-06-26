@@ -98,15 +98,28 @@ const WithdrawalModal: React.FC<WithdrawalModalProps> = ({ onClose, wallet }) =>
         };
       }
 
-      const requestId = await walletService.initiateWithdrawal(
-        auth.currentUser.uid,
-        withdrawalAmount,
-        selectedMethod,
-        withdrawalDetails
-      );
+      // Call Python backend for withdrawal processing
+      const response = await fetch('http://0.0.0.0:5000/api/wallet/withdraw', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId: auth.currentUser.uid,
+          amount: withdrawalAmount,
+          paymentMethod: selectedMethod,
+          accountDetails: withdrawalDetails
+        })
+      });
 
-      toast.success('Withdrawal request submitted! It will be processed within 24 hours.');
-      onClose();
+      const result = await response.json();
+
+      if (result.success) {
+        toast.success('Withdrawal request submitted! It will be processed within 24 hours.');
+        onClose();
+      } else {
+        throw new Error(result.error || 'Withdrawal request failed');
+      }
     } catch (error: any) {
       toast.error(error.message || 'Withdrawal request failed');
     } finally {
