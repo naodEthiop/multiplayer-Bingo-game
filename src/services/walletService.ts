@@ -18,7 +18,7 @@ import {
 import { db } from '../firebase/config';
 import { Wallet, Transaction, PaymentMethod } from '../types/wallet';
 
-export class WalletService {
+class WalletService {
   // Create or get wallet for user
   async createWallet(userId: string): Promise<Wallet> {
     const walletRef = doc(db, 'wallets', userId);
@@ -271,5 +271,7 @@ export class WalletService {
     }
   }
 }
+
+export const walletService = new WalletService();
 
 export const walletService = new WalletService();
