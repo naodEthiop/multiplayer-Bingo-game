@@ -80,7 +80,7 @@ function App() {
             />
             <Route 
               path="/wallet" 
-              element={user ? <WalletPage /> : <Navigate to="/auth" />} 
+              element={user ? <WalletPage user={user} onNavigate={() => {}} /> : <Navigate to="/auth" />} 
             />
           </Routes>
           <Toaster position="top-right" />

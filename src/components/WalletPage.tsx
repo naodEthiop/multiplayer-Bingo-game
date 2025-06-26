@@ -43,6 +43,13 @@ const WalletPage: React.FC<WalletPageProps> = ({ user, onNavigate, onBack }) => 
   useEffect(() => {
     if (!auth.currentUser) return;
 
+    // Check if walletService is properly loaded
+    if (!walletService || typeof walletService.subscribeToWallet !== 'function') {
+      console.error('WalletService not properly imported');
+      setLoading(false);
+      return;
+    }
+
     const unsubscribeWallet = walletService.subscribeToWallet(
       auth.currentUser.uid,
       (walletData) => {
@@ -57,8 +64,8 @@ const WalletPage: React.FC<WalletPageProps> = ({ user, onNavigate, onBack }) => 
     );
 
     return () => {
-      unsubscribeWallet();
-      unsubscribeTransactions();
+      if (typeof unsubscribeWallet === 'function') unsubscribeWallet();
+      if (typeof unsubscribeTransactions === 'function') unsubscribeTransactions();
     };
   }, []);
 
