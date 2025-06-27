@@ -14,7 +14,7 @@ CORS(app)
 
 CHAPA_SECRET = os.getenv("CHAPA_SECRET_KEY")
 
-cred = credentials.Certificate("serviceAccountKey.json")  # Update path if needed
+cred = credentials.Certificate("./serviceAccountKey.json")  # Update path if needed
 firebase_admin.initialize_app(cred)
 fs_db = firestore.client()
 
