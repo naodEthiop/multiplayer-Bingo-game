@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   ArrowUpRight, 
   ArrowDownLeft, 
@@ -13,12 +13,32 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { Transaction } from '../types/wallet';
+import { collection, query, where, onSnapshot } from "firebase/firestore";
+import { db } from "../firebase/config";
 
 interface TransactionHistoryProps {
-  transactions: Transaction[];
+  userId: string;
 }
 
-const TransactionHistory: React.FC<TransactionHistoryProps> = ({ transactions }) => {
+const TransactionHistory: React.FC<TransactionHistoryProps> = ({ userId }) => {
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+
+  useEffect(() => {
+    if (!userId) return; // Don't run query if userId is not set
+
+    const q = query(
+      collection(db, "transactions"),
+      where("userId", "==", userId)
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const txns = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Transaction[];
+      setTransactions(txns);
+    });
+
+    return () => unsubscribe();
+  }, [userId]);
+
   const getTransactionIcon = (type: Transaction['type']) => {
     switch (type) {
       case 'deposit': return <ArrowDownLeft className="w-5 h-5 text-green-400" />;

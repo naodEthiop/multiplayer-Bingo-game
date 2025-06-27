@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Wallet, AlertCircle } from 'lucide-react';
 import { auth } from '../firebase/config';
 import toast from 'react-hot-toast';
 import axios from "axios";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, collection, query, where, onSnapshot } from "firebase/firestore";
 import { db } from "../firebase/config";
 
 interface DepositModalProps {
@@ -14,6 +14,24 @@ interface DepositModalProps {
 const DepositModal: React.FC<DepositModalProps> = ({ onClose, wallet }) => {
   const [amount, setAmount] = useState<string>('');
   const [loading, setLoading] = useState(false);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+
+  useEffect(() => {
+    const userId = auth.currentUser?.uid;
+    if (!userId) return;
+
+    const q = query(
+      collection(db, "transactions"),
+      where("userId", "==", userId) // Only fetch current user's transactions
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const txns = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Transaction[];
+      setTransactions(txns);
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   const handleDeposit = async () => {
     if (!auth.currentUser || !amount) return;
@@ -35,14 +53,25 @@ const DepositModal: React.FC<DepositModalProps> = ({ onClose, wallet }) => {
       const userDoc = await getDoc(doc(db, "users", auth.currentUser.uid));
       const phone = userDoc.exists() ? userDoc.data().phone : "";
 
+      const email = auth.currentUser.email;
+      const displayName = auth.currentUser.displayName || "";
+      const first_name = displayName.split(" ")[0] || "User";
+      const last_name = displayName.split(" ")[1] || "";
+
+      if (!phone || !email) {
+        toast.error("Missing phone or email in your profile.");
+        setLoading(false);
+        return;
+      }
+
       // Call backend to initiate Chapa payment
       const res = await axios.post("http://localhost:5000/api/wallet/deposit", {
         userId: auth.currentUser.uid,
         amount: depositAmount,
-        email: auth.currentUser.email,
-        phone, // Pass phone number to backend
-        first_name: auth.currentUser.displayName?.split(" ")[0] || "User",
-        last_name: auth.currentUser.displayName?.split(" ")[1] || "",
+        email,
+        phone,
+        first_name,
+        last_name,
       });
 
       // Redirect user to Chapa payment page

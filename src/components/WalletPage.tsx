@@ -247,9 +247,8 @@ const WalletPage: React.FC<WalletPageProps> = ({ user, onNavigate, onBack }) => 
         {/* Transaction History */}
         <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 border border-white/20">
           <div className="flex items-center justify-between mb-6">
-            <h3 className="text-white text-xl font-semibold flex items-center space-x-2">
-              <History className="w-6 h-6" />
-              <span>Recent Transactions</span>
+            <h3 className="text-lg font-bold text-white mb-2">
+              Transaction History
             </h3>
             <button className="text-blue-400 hover:text-blue-300 font-semibold">
               View All
